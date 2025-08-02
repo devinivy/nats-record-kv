@@ -1,0 +1,61 @@
+import {
+  DiscardPolicy,
+  jetstream,
+  JetStreamApiError,
+  jetstreamManager,
+  RetentionPolicy,
+} from '@nats-io/jetstream'
+import { Kvm } from '@nats-io/kv'
+import { connect } from '@nats-io/transport-node'
+import { Jetstream as Firehose } from '@skyware/jetstream'
+import { getPartition, STORE_MESSAGE_FAIL_CODE, wait } from './util.ts'
+
+async function main() {
+  const connection = await connect({ servers: '0.0.0.0:4222' })
+  const js = jetstream(connection)
+  const jsm = await jetstreamManager(connection)
+  const cursorkv = await new Kvm(js).create('cursor', { history: 1 })
+  await jsm.streams.add({
+    name: 'ingest',
+    subjects: ['ingest.*'], // ingest.{partition}
+    discard: DiscardPolicy.New, // reject new messages as backpressure once full
+    retention: RetentionPolicy.Workqueue, // retain unacked messages
+    max_msgs: 5000,
+    max_msg_size: 1024 * 1024,
+  })
+  const cursorEntry = await cursorkv.get('ingest')
+  const cursor = cursorEntry ? parseInt(cursorEntry.string(), 10) : undefined
+  const firehose = new Firehose({ cursor })
+  let seq = cursorEntry?.revision
+  let running = false
+  firehose
+    .on('commit', async (event) => {
+      if (!running) return
+      const partition = getPartition(event.did)
+      await js
+        .publish(`ingest.${partition}`, JSON.stringify(event))
+        .catch(async (err) => {
+          if (
+            err instanceof JetStreamApiError &&
+            err.code === STORE_MESSAGE_FAIL_CODE // occurs when stream is full, backpressure
+          ) {
+            if (!running) return
+            console.log('restarting')
+            running = false
+            firehose.close()
+            await wait(1000)
+            running = true
+            firehose.start()
+          } else {
+            throw err
+          }
+        })
+      seq = await cursorkv
+        .put('ingest', event.time_us.toString(), { previousSeq: seq })
+        .catch(() => undefined) // fails when out-of-order, ensures monotonic
+    })
+    .start()
+  running = true
+}
+
+main()
