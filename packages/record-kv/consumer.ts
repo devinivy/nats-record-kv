@@ -13,6 +13,9 @@ import {
   type RecordId,
 } from './util.ts'
 
+// This is library code that would be used by consumers of the record kv store.
+// See usage example within example/like-indexer.ts
+
 type ConsumerOptions = {
   name: string
   collection: string | string[]

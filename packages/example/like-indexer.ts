@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 type IndexerOptions = {
   host?: string
 }
+
 export async function likeIndexer(opts: IndexerOptions = {}) {
   const model = getModel()
   const messages = consumer({

@@ -10,6 +10,11 @@ import { connect } from '@nats-io/transport-node'
 import { Jetstream as Firehose } from '@skyware/jetstream'
 import { getPartition, STORE_MESSAGE_FAIL_CODE, wait } from './util.ts'
 
+// This process yeets the firehose into a durable buffer which
+// is used to apply backpressure on firehose ingestion. It is also
+// partitioned, which can be used to scale out the record kv builder
+// if needed (not needed today).
+
 type IngestOptions = {
   host?: string
 }

@@ -11,12 +11,15 @@ async function main() {
   console.log('starting record kv builder')
   const ac = new AbortController()
   process.once('SIGINT', () => ac.abort())
+  // firehose ingest into durable buffer, max size applies backpressure
   console.log('starting subprocess: firehose ingester')
   const ingest = fork(relative('ingest.ts'), { signal: ac.signal })
   ingest.once('exit', () => ac.abort())
   ingest.once('error', () => ac.abort())
+  // leave a moment to setup stream and consumers
   await once(ingest, 'spawn')
-  await wait(1000) // leave a moment to setup stream and consumers
+  await wait(1000)
+  // process firehose buffer into the record kv store
   console.log('starting subprocess: kv builder')
   const kv = fork(relative('kv.ts'), { signal: ac.signal })
   kv.once('exit', () => ac.abort())
