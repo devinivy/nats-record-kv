@@ -1,41 +1,24 @@
-import {
-  getKvUpdate,
-  keyToRecordId,
-  selectCollection,
-  type RecordId,
-} from '@nats-firehose/record-kv'
-import {
-  AckPolicy,
-  DeliverPolicy,
-  jetstream,
-  jetstreamManager,
-} from '@nats-io/jetstream'
-import { connect } from '@nats-io/transport-node'
+import { consumer, type RecordId } from '@nats-firehose/record-kv'
 import { DatabaseSync } from 'node:sqlite'
 
-async function main() {
-  const connection = await connect({ servers: '0.0.0.0:4222' })
-  const js = jetstream(connection)
-  const jsm = await jetstreamManager(connection)
-  await jsm.consumers.add('KV_record', {
-    durable_name: 'like-indexer',
-    filter_subject: selectCollection('app.bsky.feed.like'),
-    ack_policy: AckPolicy.Explicit,
-    deliver_policy: DeliverPolicy.All,
-  })
-  const consumer = await js.consumers.get('KV_record', 'like-indexer')
-  const messages = await consumer.consume()
+type IndexerOptions = {
+  host?: string
+}
+export async function likeIndexer(opts: IndexerOptions = {}) {
   const model = getModel()
-  for await (const item of messages) {
-    const { key, value: record } = getKvUpdate(item)
-    const recordId = keyToRecordId(key)
+  const messages = consumer({
+    ...opts,
+    name: 'like-indexer',
+    collection: 'app.bsky.feed.like',
+  })
+  for await (const [id, record, msg] of messages) {
     if (!record) {
-      model.removeLike({ recordId })
+      model.removeLike({ recordId: id })
     } else if (typeof record['subject']?.['uri'] === 'string') {
       const subject = record['subject']['uri']
-      model.addLike({ subject, recordId })
+      model.addLike({ subject, recordId: id })
     }
-    item.ack()
+    msg.ack()
   }
 }
 
@@ -96,4 +79,7 @@ function getModel() {
   }
 }
 
-main()
+// start if run directly, e.g. node like-indexer.ts
+if (import.meta.url === `file://${process.argv[1]}`) {
+  likeIndexer()
+}
