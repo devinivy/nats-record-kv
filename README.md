@@ -14,7 +14,7 @@ The KV store is based on NATS, which allows consumers to process its contents as
 You're going to want four terminal windows to get the feel of this experiment.  Here's what's gonna happen in each one:
 1. Run NATS: a lightweight piece of infrastructure offering streaming and key-value storage.
 2. Run our record KV builder: consumes the AT Proto firehose into a key-value store of records. ([`bin.ts`](./packages/record-kv/bin.ts), forking [`ingest.ts`](./packages/record-kv/ingest.ts) and [`kv.ts`](./packages/record-kv/kv.ts))
-3. Run our example like indexer: live processes the record KV into like indexes (e.g. likers per post). ([`like-indexer.ts`](./packages/example/like-indexer.ts)
+3. Run our example like indexer: live processes the record KV into like indexes (e.g. likers per post). ([`like-indexer.ts`](./packages/example/like-indexer.ts))
 4. A spare terminal for poking around.
 
 The KV builder and like indexer can be stopped and started without losing messages.  The firehose ingest will apply backpressure if the record KV processing falls behind.
