@@ -4,6 +4,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { wait } from './util.ts'
 
+// This runs both the firehose ingester (ingest.ts) and kv builder (kv.ts) processes.
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 

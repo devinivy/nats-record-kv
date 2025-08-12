@@ -36,7 +36,7 @@ export async function* consumer(
     ack_policy: AckPolicy.Explicit,
     deliver_policy: DeliverPolicy.All,
   })
-  const consumer = await js.consumers.get('KV_record', 'like-indexer')
+  const consumer = await js.consumers.get('KV_record', name)
   const messages = await consumer.consume()
   for await (const msg of messages) {
     const { key, value: record } = getKvUpdate(msg)
