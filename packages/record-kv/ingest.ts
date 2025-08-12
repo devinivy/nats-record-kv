@@ -40,7 +40,9 @@ async function main() {
             err.code === STORE_MESSAGE_FAIL_CODE // occurs when stream is full, backpressure
           ) {
             if (!running) return
-            console.log('restarting')
+            console.warn(
+              `restarting firehose ingest due to backpressure (seq ${seq ?? 'none'})`,
+            )
             running = false
             firehose.close()
             await wait(1000)
@@ -50,9 +52,10 @@ async function main() {
             throw err
           }
         })
+      // @NOTE cursor management would need a little more love to ensure there are no gaps during restart/crashes.
       seq = await cursorkv
         .put('ingest', event.time_us.toString(), { previousSeq: seq })
-        .catch(() => undefined) // fails when out-of-order, ensures monotonic
+        .catch(() => seq)
     })
     .start()
   running = true

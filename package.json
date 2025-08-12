@@ -1,12 +1,17 @@
 {
-  "name": "lexi",
+  "name": "nats-firehose",
   "type": "module",
   "version": "0.0.0",
-  "description": "Work with AT Protocol Lexicons",
+  "description": "A sync experiment with AT Proto and NATS",
   "main": "index.js",
   "scripts": {
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "kv": "pnpm --filter record-kv kv",
+    "ingest": "pnpm --filter record-kv ingest",
+    "like-indexer": "pnpm --filter example like-indexer",
+    "get-likes-by": "pnpm --filter example get-likes-by",
+    "nats-reset": "nats stream del ingest && nats kv del cursor && nats kv del record"
   },
   "keywords": [],
   "author": "Devin Ivy <devin@blueskyweb.xyz>",

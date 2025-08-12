@@ -1,4 +1,10 @@
 import {
+  getKvUpdate,
+  keyToRecordId,
+  selectCollection,
+  type RecordId,
+} from '@nats-firehose/record-kv'
+import {
   AckPolicy,
   DeliverPolicy,
   jetstream,
@@ -6,24 +12,18 @@ import {
 } from '@nats-io/jetstream'
 import { connect } from '@nats-io/transport-node'
 import { DatabaseSync } from 'node:sqlite'
-import {
-  getKvUpdate,
-  keyToRecordId,
-  selectCollection,
-  type RecordId,
-} from './util.ts'
 
 async function main() {
   const connection = await connect({ servers: '0.0.0.0:4222' })
   const js = jetstream(connection)
   const jsm = await jetstreamManager(connection)
   await jsm.consumers.add('KV_record', {
-    durable_name: 'likes-counts',
+    durable_name: 'like-indexer',
     filter_subject: selectCollection('app.bsky.feed.like'),
     ack_policy: AckPolicy.Explicit,
     deliver_policy: DeliverPolicy.All,
   })
-  const consumer = await js.consumers.get('KV_record', 'likes-counts')
+  const consumer = await js.consumers.get('KV_record', 'like-indexer')
   const messages = await consumer.consume()
   const model = getModel()
   for await (const item of messages) {
@@ -40,7 +40,7 @@ async function main() {
 }
 
 function getModel() {
-  const db = new DatabaseSync('index.sqlite')
+  const db = new DatabaseSync('like-index.sqlite')
   db.exec('PRAGMA journal_mode=WAL')
   db.exec(`
     CREATE TABLE IF NOT EXISTS likers_by_subject (

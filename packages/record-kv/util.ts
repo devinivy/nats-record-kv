@@ -44,6 +44,9 @@ export function selectCollection(nsid: string) {
   return `$KV.record.*.${nsid}.>`
 }
 
+// since nats keys have a limited character set, we have encode/decode functions
+// inspired by %-encoding to allow encoding any character into a nats key.
+
 const encodeRegexp = /[^A-Za-z0-9_=/-]/g
 export function encodeNatsKeyPart(str: string) {
   return str.replace(encodeRegexp, (ch) => {
