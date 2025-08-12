@@ -5,9 +5,19 @@
 
 This experiment builds a KV store of records from the firehose, which is able to serve a variety of needs in daily app development and in production.  This setup could also potentially bridge local development and cloud.
 
-The main idea of the experiment is to make it both straightforward and efficient to materialize the contents of the record KV store into arbitrary views determined by an application, and maintain those views over time.
+The main idea of the experiment is to make it straightforward to materialize the contents of the record KV store into arbitrary views determined by an application, and maintain those views over time.  Usage ends up looking like this:
+```ts
+const messages = consumer({
+  name: 'like-indexer',
+  collection: 'app.bsky.feed.like',
+})
+for await (const [id, record, msg] of messages) {
+  // process record
+  msg.ack()
+}
+```
 
-The KV store is based on NATS, which allows consumers to process its contents as a stream.  Consumers transparently pick up from "live" after processing the contents of the store, so applications don't treat "backfill" as a special mode or job.  Stream processing state is maintained automatically, and processing can be scaled out horizontally on the consumer side.  More in the [Details](#details) section below.
+The KV store is based on NATS, which allows consumers to process its contents as a stream.  Consumers transparently pick up from "live" after processing the contents of the KV store, so applications don't treat "backfill" as a special mode or job.  Stream processing state is maintained automatically, and processing can be scaled out horizontally on the consumer side.  More in the [Details](#details) section below.
 
 ## Usage
 

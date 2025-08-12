@@ -6,19 +6,12 @@ type IndexerOptions = {
 }
 
 export async function likeIndexer(opts: IndexerOptions = {}) {
-  const model = getModel()
   const messages = consumer({
-    ...opts,
     name: 'like-indexer',
     collection: 'app.bsky.feed.like',
   })
   for await (const [id, record, msg] of messages) {
-    if (!record) {
-      model.removeLike({ recordId: id })
-    } else if (typeof record['subject']?.['uri'] === 'string') {
-      const subject = record['subject']['uri']
-      model.addLike({ subject, recordId: id })
-    }
+    // process record
     msg.ack()
   }
 }
