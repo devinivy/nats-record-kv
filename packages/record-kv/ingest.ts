@@ -10,8 +10,12 @@ import { connect } from '@nats-io/transport-node'
 import { Jetstream as Firehose } from '@skyware/jetstream'
 import { getPartition, STORE_MESSAGE_FAIL_CODE, wait } from './util.ts'
 
-async function main() {
-  const connection = await connect({ servers: '0.0.0.0:4222' })
+type IngestOptions = {
+  host?: string
+}
+
+export async function createFirehoseIngest(opts: IngestOptions = {}) {
+  const connection = await connect({ servers: opts.host })
   const js = jetstream(connection)
   const jsm = await jetstreamManager(connection)
   const cursorkv = await new Kvm(js).create('cursor', { history: 1 })
@@ -61,4 +65,7 @@ async function main() {
   running = true
 }
 
-main()
+// start if run directly, e.g. node ingest.ts
+if (import.meta.url === `file://${process.argv[1]}`) {
+  createFirehoseIngest()
+}

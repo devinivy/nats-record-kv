@@ -4,8 +4,12 @@ import { connect } from '@nats-io/transport-node'
 import { type CommitEvent } from '@skyware/jetstream'
 import { recordIdToKey } from './util.ts'
 
-async function main() {
-  const connection = await connect({ servers: '0.0.0.0:4222' })
+type KvOptions = {
+  host?: string
+}
+
+export async function createKvBuilder(opts: KvOptions = {}) {
+  const connection = await connect({ servers: opts.host })
   const js = jetstream(connection)
   const jsm = await jetstreamManager(connection)
   const recordkv = await new Kvm(js).create('record', { history: 1 })
@@ -31,4 +35,7 @@ async function main() {
   }
 }
 
-main()
+// start if run directly, e.g. node kv.ts
+if (import.meta.url === `file://${process.argv[1]}`) {
+  createKvBuilder()
+}

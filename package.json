@@ -7,8 +7,7 @@
   "scripts": {
     "lint": "eslint .",
     "format": "prettier --write .",
-    "kv": "pnpm --filter record-kv kv",
-    "ingest": "pnpm --filter record-kv ingest",
+    "record-kv-builder": "pnpm --filter record-kv start",
     "like-indexer": "pnpm --filter example like-indexer",
     "get-likes-by": "pnpm --filter example get-likes-by",
     "nats-reset": "nats stream del ingest && nats kv del cursor && nats kv del record"

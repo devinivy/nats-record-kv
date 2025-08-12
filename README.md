@@ -34,6 +34,7 @@ The KV builder and like indexer can be stopped and started without losing messag
 terminal1$ nvm install 24
 terminal2$ nvm use 24
 terminal3$ nvm use 24
+terminal4$ nvm use 24
 
 # Install the project
 terminal1$ pnpm install
@@ -43,7 +44,7 @@ terminal1$ curl -fsSL https://binaries.nats.dev/nats-io/nats-server/v2@v2.11.6 |
 terminal1$ nats-server --jetstream
 
 # Run record KV builder
-terminal2$ pnpm run record-kv
+terminal2$ pnpm run record-kv-builder
 
 # Run like indexer
 terminal3$ pnpm run like-indexer
