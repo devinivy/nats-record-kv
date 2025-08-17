@@ -1,0 +1,20 @@
+{
+  "name": "sync",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@atproto/lexicon": "^0.4.12",
+    "@atproto/xrpc-server": "^0.9.1",
+    "@nats-io/jetstream": "^3.1.0",
+    "@nats-io/kv": "^3.1.0",
+    "@nats-io/transport-node": "^3.1.0",
+    "multiformats": "^13.4.0",
+    "murmurhash": "^2.0.1"
+  }
+}
