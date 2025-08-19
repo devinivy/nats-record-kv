@@ -9,7 +9,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@atproto-labs/did-resolver": "^0.2.0",
     "@atproto/lexicon": "^0.4.12",
+    "@atproto/repo": "^0.8.5",
     "@atproto/xrpc-server": "^0.9.1",
     "@nats-io/jetstream": "^3.1.0",
     "@nats-io/kv": "^3.1.0",

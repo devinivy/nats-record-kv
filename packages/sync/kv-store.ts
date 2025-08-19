@@ -13,7 +13,7 @@ export interface KvStore {
 export class SqliteKvStore implements KvStore {
   public db: DatabaseSync
 
-  constructor(db: DatabaseSync) {
+  constructor(db = new DatabaseSync(':memory:')) {
     this.db = db
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS kv_store (

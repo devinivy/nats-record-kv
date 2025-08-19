@@ -13,20 +13,46 @@ export class ActorStore {
     return JSON.parse(raw) as Actor
   }
 
-  async put(did: string, actor: Actor): Promise<void> {
+  async put(did: string, actor: Actor): Promise<Actor> {
     await this.kv.put(['actor', did], JSON.stringify(actor))
+    return actor
   }
 }
 
 export type Actor = {
   did: string
-  rev: string
-  status:
-    | null // active
-    | 'takendown'
-    | 'suspended'
-    | 'deleted'
-    | 'deactivated'
-    | 'desynchronized'
-    | 'throttled'
+  pubKey: string | null
+  rev: string | null
+  dataCid: string | null
+  status: ActorStatus | null
+  upstreamStatus: ActorStatus | 'unknown' | null
+}
+
+export type ActorStatus =
+  | 'takendown'
+  | 'suspended'
+  | 'deleted'
+  | 'deactivated'
+  | 'desynchronized'
+  | 'throttled'
+
+export function createActor(actor: Partial<Actor> & { did: string }): Actor {
+  return Object.assign({}, actor, {
+    dataCid: null,
+    pubKey: null,
+    rev: null,
+    status: 'desynchronized',
+    upstreamStatus: null,
+  })
+}
+
+export function isActorStatus(status: unknown): status is ActorStatus {
+  return (
+    status === 'takendown' ||
+    status === 'suspended' ||
+    status === 'deleted' ||
+    status === 'deactivated' ||
+    status === 'desynchronized' ||
+    status === 'throttled'
+  )
 }

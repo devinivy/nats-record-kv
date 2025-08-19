@@ -2,7 +2,7 @@ import { CID } from 'multiformats/cid'
 
 const id = 'com.atproto.sync.subscribeRepos'
 
-export type SubscribeReposMessage =
+export type SubscribeReposEvent =
   | $Typed<Commit>
   | $Typed<Sync>
   | $Typed<Identity>

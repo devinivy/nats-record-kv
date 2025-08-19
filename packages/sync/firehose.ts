@@ -12,7 +12,7 @@ import { Kvm, type KV } from '@nats-io/kv'
 import { connect } from '@nats-io/transport-node'
 import { default as murmur } from 'murmurhash'
 import { ConsecutiveList } from './consecutive-list.ts'
-import type { SubscribeReposMessage } from './types.ts'
+import type { SubscribeReposEvent } from './types.ts'
 
 // This process yeets the firehose into a durable buffer which
 // is used to apply backpressure on firehose ingestion. It is also
@@ -49,33 +49,31 @@ export async function createFirehoseIngest(opts: IngestOptions = {}) {
       getCursor: () => cursor.current,
     })
     try {
-      for await (const msg of firehose) {
+      for await (const evt of firehose) {
         if (lock.size >= 1000) ac.abort()
         if (ac.signal.aborted) break
         if (
-          msg.$type === 'com.atproto.sync.subscribeRepos#commit' ||
-          msg.$type === 'com.atproto.sync.subscribeRepos#account' ||
-          msg.$type === 'com.atproto.sync.subscribeRepos#identity' ||
-          msg.$type === 'com.atproto.sync.subscribeRepos#sync'
+          evt.$type === 'com.atproto.sync.subscribeRepos#commit' ||
+          evt.$type === 'com.atproto.sync.subscribeRepos#sync' ||
+          evt.$type === 'com.atproto.sync.subscribeRepos#account' ||
+          evt.$type === 'com.atproto.sync.subscribeRepos#identity'
         ) {
-          const did = 'repo' in msg ? msg.repo : msg.did
-          const item = consecutive.push(msg.seq)
+          const did = 'repo' in evt ? evt.repo : evt.did
+          const item = consecutive.push(evt.seq)
           const partition = getPartition(did)
-          const payload = stringifyLex(msg)
+          const payload = stringifyLex(evt)
           lock
             .run(did, async () => {
               if (ac.signal.aborted) return
               await publish(js, `firehose.${partition}`, payload)
               const latest = item.complete().at(-1)
-              if (latest != null) {
-                await cursor.set(latest)
-              }
+              if (latest != null) await cursor.set(latest)
             })
             .catch(() => ac.abort())
-        } else if (msg.$type === 'com.atproto.sync.subscribeRepos#info') {
-          console.warn('firehose info', msg.name, msg.message) // @TODO logger
+        } else if (evt.$type === 'com.atproto.sync.subscribeRepos#info') {
+          console.warn('firehose info', evt.name, evt.message) // @TODO logger
         } else {
-          console.warn('unhandled firehose event', msg['seq'], msg['$type']) // @TODO logger
+          console.warn('unhandled firehose event', evt['seq'], evt['$type']) // @TODO logger
         }
       }
     } catch {
@@ -147,17 +145,17 @@ function createSubscription(opts: {
   getCursor?: () => number | undefined
   signal?: AbortSignal
 }) {
-  return new Subscription<SubscribeReposMessage>({
-    service: opts.host ?? 'wss://bsky.network',
+  return new Subscription<SubscribeReposEvent>({
+    service: opts.host ?? 'wss://relay1.us-east.bsky.network',
     method: 'com.atproto.sync.subscribeRepos',
     signal: opts.signal,
     getParams: () => {
       const cursor = opts.getCursor?.()
       return { cursor }
     },
-    validate: (value: unknown): SubscribeReposMessage => {
+    validate: (value: unknown): SubscribeReposEvent => {
       // @TODO validation?
-      return value as SubscribeReposMessage
+      return value as SubscribeReposEvent
     },
   })
 }
