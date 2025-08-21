@@ -8,6 +8,7 @@ import {
   verifyCommitSig as verifyRepoCommitSig,
   type Commit,
 } from '@atproto/repo'
+import type { CID } from 'multiformats'
 import type { Actor, ActorStore } from '../actor-store.ts'
 import type { RepoOp } from '../types.ts'
 
@@ -68,4 +69,8 @@ export async function invertOps(mst: MST, ops: RepoOp[]) {
     }
   }
   return await mst.getPointer()
+}
+
+export function truncatedCid(cid: CID) {
+  return cid.toString().slice(-8)
 }

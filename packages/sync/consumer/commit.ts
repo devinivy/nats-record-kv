@@ -1,19 +1,28 @@
 import type { DidResolver } from '@atproto-labs/did-resolver'
 import { MST } from '@atproto/repo'
 import { type ActorStore } from '../actor-store.ts'
-import type { Commit } from '../types.ts'
+import type { RecordStore } from '../record-store.ts'
+import { isRepoOpStrict, type Commit } from '../types.ts'
 import { syncActorRepo } from './sync.ts'
-import { getCommit, invertOps, syncPubKey, verifyCommitSig } from './util.ts'
+import {
+  getCommit,
+  invertOps,
+  syncPubKey,
+  truncatedCid,
+  verifyCommitSig,
+} from './util.ts'
 
 export async function commit(
   evt: Commit,
   opts: {
     actorStore: ActorStore
+    recordStore: RecordStore
     didResolver: DidResolver<'web' | 'plc'>
   },
 ) {
-  const { actorStore } = opts
+  const { actorStore, recordStore } = opts
   if (!evt.prevData) return // non-sync1.1, skip/warn
+  if (!evt.ops.every(isRepoOpStrict)) return // non-sync1.1, skip/warn
   const did = evt.repo
   let actor = await actorStore.get(did)
   if (actor?.upstreamStatus) {
@@ -62,6 +71,13 @@ export async function commit(
     }
     await syncActorRepo({ did, blocks: evt.blocks, actor }, opts)
     return
+  }
+  for (const op of evt.ops) {
+    const [collection, rkey] = op.path.split('/')
+    await recordStore.put([did, collection, rkey], {
+      rev: commit.rev,
+      cid: op.cid ? truncatedCid(op.cid) : null,
+    })
   }
   await actorStore.put(did, {
     ...actor,

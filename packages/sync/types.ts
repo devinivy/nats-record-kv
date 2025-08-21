@@ -96,6 +96,18 @@ export interface RepoOp {
   prev?: CID
 }
 
+export type RepoOpStrict =
+  | { action: 'create'; path: string; cid: CID }
+  | { action: 'update'; path: string; cid: CID; prev: CID }
+  | { action: 'delete'; path: string; cid: null }
+
+export function isRepoOpStrict(op: RepoOp): op is RepoOpStrict {
+  if (op.action === 'create' && op.cid) return true
+  if (op.action === 'update' && op.cid && op.prev) return true
+  if (op.action === 'delete' && !op.cid) return true
+  return false
+}
+
 type $Typed<V, T extends string = string> = V & { $type: T }
 
 type $Type<Id extends string, Hash extends string> = Hash extends 'main'
