@@ -1,7 +1,4 @@
-import type { DidResolver } from '@atproto-labs/did-resolver'
 import { MST } from '@atproto/repo'
-import { type ActorStore } from '../actor-store.ts'
-import type { RecordStore } from '../record-store.ts'
 import { isRepoOpStrict, type Commit } from '../types.ts'
 import { syncActorRepo } from './sync.ts'
 import {
@@ -10,17 +7,11 @@ import {
   syncPubKey,
   truncatedCid,
   verifyCommitSig,
+  type SyncConsumerContext,
 } from './util.ts'
 
-export async function commit(
-  evt: Commit,
-  opts: {
-    actorStore: ActorStore
-    recordStore: RecordStore
-    didResolver: DidResolver<'web' | 'plc'>
-  },
-) {
-  const { actorStore, recordStore } = opts
+export async function commit(evt: Commit, ctx: SyncConsumerContext) {
+  const { actorStore, recordStore } = ctx
   if (!evt.prevData) return // non-sync1.1, skip/warn
   if (!evt.ops.every(isRepoOpStrict)) return // non-sync1.1, skip/warn
   const did = evt.repo
@@ -37,7 +28,7 @@ export async function commit(
     !actor.dataCid ||
     actor.status === 'desynchronized'
   ) {
-    await syncActorRepo({ did, blocks: evt.blocks, actor }, opts)
+    await syncActorRepo({ did, blocks: evt.blocks, actor }, ctx)
     return
   }
   const { commit, blockstore } = await getCommit(evt.blocks)
@@ -51,7 +42,7 @@ export async function commit(
   let valid = await verifyCommitSig(actor, commit)
   if (!valid) {
     const prevPubKey = actor.pubKey
-    actor = await syncPubKey(actor, opts)
+    actor = await syncPubKey(actor, ctx)
     if (actor.pubKey !== prevPubKey) {
       valid = await verifyCommitSig(actor, commit)
     }
@@ -69,7 +60,7 @@ export async function commit(
     if (!actor.status) {
       actor = await actorStore.put(did, { ...actor, status: 'desynchronized' })
     }
-    await syncActorRepo({ did, blocks: evt.blocks, actor }, opts)
+    await syncActorRepo({ did, blocks: evt.blocks, actor }, ctx)
     return
   }
   for (const op of evt.ops) {

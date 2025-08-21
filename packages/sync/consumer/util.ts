@@ -10,6 +10,7 @@ import {
 } from '@atproto/repo'
 import type { CID } from 'multiformats'
 import type { Actor, ActorStore } from '../actor-store.ts'
+import type { RecordStore } from '../record-store.ts'
 import type { RepoOp } from '../types.ts'
 
 export async function getCommit(blocks: Uint8Array) {
@@ -74,3 +75,27 @@ export async function invertOps(mst: MST, ops: RepoOp[]) {
 export function truncatedCid(cid: CID) {
   return cid.toString().slice(-8)
 }
+
+export type SyncConsumerContext = {
+  actorStore: ActorStore
+  recordStore: RecordStore
+  didResolver: DidResolver<'web' | 'plc'>
+}
+
+export type HexChar =
+  | '0'
+  | '1'
+  | '2'
+  | '3'
+  | '4'
+  | '5'
+  | '6'
+  | '7'
+  | '8'
+  | '9'
+  | 'a'
+  | 'b'
+  | 'c'
+  | 'd'
+  | 'e'
+  | 'f'

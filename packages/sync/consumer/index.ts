@@ -12,6 +12,7 @@ import { account } from './account.ts'
 import { commit } from './commit.ts'
 import { identity } from './identity.ts'
 import { sync } from './sync.ts'
+import type { HexChar, SyncConsumerContext } from './util.ts'
 
 // This process yeets the firehose into a durable buffer which
 // is used to apply backpressure on firehose ingestion. It is also
@@ -37,10 +38,11 @@ export async function createSyncConsumer(opts: SyncConsumerOptions = {}) {
     ack_policy: AckPolicy.Explicit,
   })
   const kv = opts.kv ?? new SqliteKvStore()
-  const actorStore = new ActorStore(kv)
-  const recordStore = new RecordStore(kv)
-  const didResolver = new DidResolverCommon()
-  const ctx = { actorStore, recordStore, didResolver }
+  const ctx: SyncConsumerContext = {
+    actorStore: new ActorStore(kv),
+    recordStore: new RecordStore(kv),
+    didResolver: new DidResolverCommon(),
+  }
   const consumer = await js.consumers.get('firehose', name)
   const messages = await consumer.consume()
   for await (const msg of messages) {
@@ -63,24 +65,6 @@ export async function createSyncConsumer(opts: SyncConsumerOptions = {}) {
     msg.ack()
   }
 }
-
-type HexChar =
-  | '0'
-  | '1'
-  | '2'
-  | '3'
-  | '4'
-  | '5'
-  | '6'
-  | '7'
-  | '8'
-  | '9'
-  | 'a'
-  | 'b'
-  | 'c'
-  | 'd'
-  | 'e'
-  | 'f'
 
 // start if run directly, e.g. node kv.ts
 if (import.meta.url === `file://${process.argv[1]}`) {

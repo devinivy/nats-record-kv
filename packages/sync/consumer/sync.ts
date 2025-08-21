@@ -1,28 +1,19 @@
 import assert from 'node:assert'
-import type { DidResolver } from '@atproto-labs/did-resolver'
-import { ActorStore, createActor, type Actor } from '../actor-store.ts'
+import { createActor, type Actor } from '../actor-store.ts'
 import type { Sync } from '../types.ts'
-import { getCommit, syncPubKey, verifyCommitSig } from './util.ts'
+import {
+  getCommit,
+  syncPubKey,
+  verifyCommitSig,
+  type SyncConsumerContext,
+} from './util.ts'
 
 // @TODO actually diff and emit record ops
 // @TODO handle abuse
 
-export async function sync(
-  evt: Sync,
-  opts: {
-    actorStore: ActorStore
-    didResolver: DidResolver<'web' | 'plc'>
-  },
-) {
-  const actor = await opts.actorStore.get(evt.did)
-  await syncActorRepo(
-    {
-      did: evt.did,
-      blocks: evt.blocks,
-      actor,
-    },
-    opts,
-  )
+export async function sync(evt: Sync, ctx: SyncConsumerContext) {
+  const actor = await ctx.actorStore.get(evt.did)
+  await syncActorRepo({ did: evt.did, blocks: evt.blocks, actor }, ctx)
 }
 
 // @NOTE mutates and returns actor
@@ -32,12 +23,9 @@ export async function syncActorRepo(
     blocks,
     actor,
   }: { did: string; actor: Actor | null; blocks: Uint8Array },
-  opts: {
-    actorStore: ActorStore
-    didResolver: DidResolver<'web' | 'plc'>
-  },
+  ctx: SyncConsumerContext,
 ) {
-  const { actorStore } = opts
+  const { actorStore } = ctx
   assert(!actor || actor.did === did)
   if (!actor) {
     actor = await actorStore.put(did, createActor({ did }))
@@ -59,7 +47,7 @@ export async function syncActorRepo(
   let valid = await verifyCommitSig(actor, commit)
   if (!valid) {
     const prevPubKey = actor.pubKey
-    actor = await syncPubKey(actor, opts)
+    actor = await syncPubKey(actor, ctx)
     if (actor.pubKey !== prevPubKey) {
       valid = await verifyCommitSig(actor, commit)
     }

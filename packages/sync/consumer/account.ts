@@ -1,8 +1,9 @@
-import { ActorStore, createActor, isActorStatus } from '../actor-store.ts'
+import { createActor, isActorStatus } from '../actor-store.ts'
 import type { Account } from '../types.ts'
+import type { SyncConsumerContext } from './util.ts'
 
-export async function account(evt: Account, opts: { actorStore: ActorStore }) {
-  const { actorStore } = opts
+export async function account(evt: Account, ctx: SyncConsumerContext) {
+  const { actorStore } = ctx
   const status = evt.active
     ? null
     : isActorStatus(evt.status)
