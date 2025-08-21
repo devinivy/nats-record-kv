@@ -6,6 +6,7 @@ import { connect } from '@nats-io/transport-node'
 import { DatabaseSync } from 'node:sqlite'
 import { ActorStore } from '../actor-store.ts'
 import { SqliteKvStore, type KvStore } from '../kv-store.ts'
+import { RecordStore } from '../record-store.ts'
 import type { SubscribeReposEvent } from '../types.ts'
 import { account } from './account.ts'
 import { commit } from './commit.ts'
@@ -35,9 +36,11 @@ export async function createSyncConsumer(opts: SyncConsumerOptions = {}) {
       : ['firehose.*'],
     ack_policy: AckPolicy.Explicit,
   })
-  const actorStore = new ActorStore(opts.kv ?? new SqliteKvStore())
+  const kv = opts.kv ?? new SqliteKvStore()
+  const actorStore = new ActorStore(kv)
+  const recordStore = new RecordStore(kv)
   const didResolver = new DidResolverCommon()
-  const ctx = { actorStore, didResolver }
+  const ctx = { actorStore, recordStore, didResolver }
   const consumer = await js.consumers.get('firehose', name)
   const messages = await consumer.consume()
   for await (const msg of messages) {
