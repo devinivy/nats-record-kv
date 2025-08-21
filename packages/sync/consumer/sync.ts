@@ -2,7 +2,7 @@ import assert from 'node:assert'
 import type { DidResolver } from '@atproto-labs/did-resolver'
 import { ActorStore, createActor, type Actor } from '../actor-store.ts'
 import type { Sync } from '../types.ts'
-import { validateCommit } from './util.ts'
+import { getCommit, syncPubKey, verifyCommitSig } from './util.ts'
 
 // @TODO actually diff and emit record ops
 // @TODO handle abuse
@@ -48,13 +48,27 @@ export async function syncActorRepo(
   if (actor.status === 'deleted' || actor.status === 'throttled') {
     return // local status set to stop processing
   }
-  const validated = await validateCommit({ actor, blocks }, opts)
-  if (!validated) return
-  actor = validated.actor
+  const { commit } = await getCommit(blocks)
+  if (commit.did !== actor.did) {
+    return // bad
+  }
+  if (actor.rev && commit.rev <= actor.rev) {
+    return // known rev is higher
+  }
+  // validate commit, and if that fails then sync pubkey and try again
+  let valid = await verifyCommitSig(actor, commit)
+  if (!valid) {
+    const prevPubKey = actor.pubKey
+    actor = await syncPubKey(actor, opts)
+    if (actor.pubKey !== prevPubKey) {
+      valid = await verifyCommitSig(actor, commit)
+    }
+  }
+  if (!valid) return
   return await actorStore.put(did, {
     ...actor,
-    rev: validated.commit.rev,
-    dataCid: validated.commit.data.toString(),
+    rev: commit.rev,
+    dataCid: commit.data.toString(),
     status: actor.status === 'desynchronized' ? null : actor.status,
   })
 }

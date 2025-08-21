@@ -5,47 +5,22 @@ import {
   MemoryBlockstore,
   MST,
   readCarWithRoot,
-  verifyCommitSig,
+  verifyCommitSig as verifyRepoCommitSig,
+  type Commit,
 } from '@atproto/repo'
 import type { Actor, ActorStore } from '../actor-store.ts'
 import type { RepoOp } from '../types.ts'
 
-// @NOTE mutates and returns actor
-export async function validateCommit(
-  {
-    actor,
-    blocks,
-  }: {
-    actor: Actor
-    blocks: Uint8Array
-  },
-  opts: {
-    actorStore: ActorStore
-    didResolver: DidResolver<'web' | 'plc'>
-  },
-) {
+export async function getCommit(blocks: Uint8Array) {
   const car = await readCarWithRoot(blocks) // @TODO mark validate CIDs once released
   const blockstore = new MemoryBlockstore(car.blocks)
   const commit = await blockstore.readObj(car.root, def.commit)
-  if (commit.did !== actor.did) {
-    return // bad
-  }
-  if (actor.rev && commit.rev <= actor.rev) {
-    return // known rev is higher
-  }
-  let validSig = actor.pubKey
-    ? await verifyCommitSig(commit, `did:key:${actor.pubKey}`)
-    : false
-  if (!validSig) {
-    // refresh key and try again
-    const prevPubKey = actor.pubKey
-    actor = await syncPubKey(actor, opts)
-    if (actor.pubKey && actor.pubKey !== prevPubKey) {
-      validSig = await verifyCommitSig(commit, `did:key:${actor.pubKey}`)
-    }
-    if (!validSig) return // bad
-  }
-  return { actor, commit, blockstore }
+  return { commit, blockstore }
+}
+
+export async function verifyCommitSig(actor: Actor, commit: Commit) {
+  if (!actor.pubKey) return false
+  return verifyRepoCommitSig(commit, `did:key:${actor.pubKey}`)
 }
 
 // @NOTE mutates and returns actor
@@ -67,7 +42,7 @@ export async function syncPubKey(
       vm.publicKeyMultibase
     )
   })
-  if (!verificationMethod) {
+  if (!verificationMethod || actor.pubKey === verificationMethod) {
     return actor
   }
   assert(

@@ -3,7 +3,7 @@ import { MST } from '@atproto/repo'
 import { type ActorStore } from '../actor-store.ts'
 import type { Commit } from '../types.ts'
 import { syncActorRepo } from './sync.ts'
-import { invertOps, validateCommit } from './util.ts'
+import { getCommit, invertOps, syncPubKey, verifyCommitSig } from './util.ts'
 
 export async function commit(
   evt: Commit,
@@ -31,10 +31,25 @@ export async function commit(
     await syncActorRepo({ did, blocks: evt.blocks, actor }, opts)
     return
   }
-  const validated = await validateCommit({ actor, blocks: evt.blocks }, opts)
-  if (!validated) return
-  actor = validated.actor
-  const mst = MST.load(validated.blockstore, validated.commit.data)
+  const { commit, blockstore } = await getCommit(evt.blocks)
+  if (commit.did !== actor.did) {
+    return // bad
+  }
+  if (actor.rev && commit.rev <= actor.rev) {
+    return // known rev is higher
+  }
+  // validate commit, and if that fails then sync pubkey and try again
+  let valid = await verifyCommitSig(actor, commit)
+  if (!valid) {
+    const prevPubKey = actor.pubKey
+    actor = await syncPubKey(actor, opts)
+    if (actor.pubKey !== prevPubKey) {
+      valid = await verifyCommitSig(actor, commit)
+    }
+  }
+  if (!valid) return
+  // invert opts on top of covering proof mst
+  const mst = MST.load(blockstore, commit.data)
   const dataCid = await invertOps(mst, evt.ops).catch(() => undefined)
   if (!dataCid) {
     // could not invert ops, indicates a programmer error: bail.
@@ -50,7 +65,7 @@ export async function commit(
   }
   await actorStore.put(did, {
     ...actor,
-    rev: validated.commit.rev,
-    dataCid: validated.commit.data.toString(),
+    rev: commit.rev,
+    dataCid: commit.data.toString(),
   })
 }
