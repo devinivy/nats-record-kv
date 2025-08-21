@@ -1,7 +1,6 @@
 import { DidResolverCommon } from '@atproto-labs/did-resolver'
 import { jsonToLex } from '@atproto/lexicon'
 import { AckPolicy, jetstream, jetstreamManager } from '@nats-io/jetstream'
-// import { Kvm } from '@nats-io/kv'
 import { connect } from '@nats-io/transport-node'
 import { DatabaseSync } from 'node:sqlite'
 import { ActorStore } from '../actor-store.ts'
@@ -28,12 +27,11 @@ export async function createSyncConsumer(opts: SyncConsumerOptions = {}) {
   const connection = await connect({ servers: opts.natsHost })
   const js = jetstream(connection)
   const jsm = await jetstreamManager(connection)
-  // const recordkv = await new Kvm(js).create('record', { history: 1 })
   const name = `sync-consumer-${opts.partitions?.join('-') ?? 'all'}`
   await jsm.consumers.add('firehose', {
     durable_name: name,
     filter_subjects: opts.partitions
-      ? (opts.partitions ?? ['*']).map((p) => `firehose.${p}`)
+      ? opts.partitions.map((p) => `firehose.${p}`)
       : ['firehose.*'],
     ack_policy: AckPolicy.Explicit,
   })
