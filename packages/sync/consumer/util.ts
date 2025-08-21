@@ -26,15 +26,9 @@ export async function verifyCommitSig(actor: Actor, commit: Commit) {
 }
 
 // @NOTE mutates and returns actor
-export async function syncPubKey(
-  actor: Actor,
-  opts: {
-    actorStore: ActorStore
-    didResolver: DidResolver<'web' | 'plc'>
-  },
-) {
+export async function syncPubKey(actor: Actor, ctx: SyncConsumerContext) {
   const did = actor.did as Did<'web' | 'plc'>
-  const { actorStore, didResolver } = opts
+  const { actorStore, didResolver } = ctx
   const resolved = await didResolver.resolve(did).catch(() => undefined)
   const verificationMethod = resolved?.verificationMethod?.find((vm) => {
     return (
