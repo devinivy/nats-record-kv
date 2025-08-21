@@ -8,8 +8,8 @@ import {
   type SyncConsumerContext,
 } from './util.ts'
 
-// @TODO actually diff and emit record ops
-// @TODO handle abuse
+// @TODO abuse counters
+// @TODO diff and emit record ops
 
 export async function sync(evt: Sync, ctx: SyncConsumerContext) {
   const actor = await ctx.actorStore.get(evt.did)
@@ -38,7 +38,7 @@ export async function syncActorRepo(
   }
   const { commit } = await getCommit(blocks)
   if (commit.did !== actor.did) {
-    return // bad
+    return // bad commit
   }
   if (actor.rev && commit.rev <= actor.rev) {
     return // known rev is higher

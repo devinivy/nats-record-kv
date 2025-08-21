@@ -33,9 +33,9 @@ export async function commit(evt: Commit, ctx: SyncConsumerContext) {
   }
   const { commit, blockstore } = await getCommit(evt.blocks)
   if (commit.did !== actor.did) {
-    return // bad
+    return // bad commit
   }
-  if (actor.rev && commit.rev <= actor.rev) {
+  if (commit.rev <= actor.rev) {
     return // known rev is higher
   }
   // validate commit, and if that fails then sync pubkey and try again
@@ -52,8 +52,7 @@ export async function commit(evt: Commit, ctx: SyncConsumerContext) {
   const mst = MST.load(blockstore, commit.data)
   const dataCid = await invertOps(mst, evt.ops).catch(() => undefined)
   if (!dataCid) {
-    // could not invert ops, indicates a programmer error: bail.
-    return
+    return // could not invert ops, indicates a programmer error.
   }
   if (actor.dataCid !== dataCid.toString()) {
     // ops inverted but mismatching current state, indicates an operational error: sync.
@@ -64,6 +63,7 @@ export async function commit(evt: Commit, ctx: SyncConsumerContext) {
     return
   }
   for (const op of evt.ops) {
+    // @TODO emit record values
     const [collection, rkey] = op.path.split('/')
     await recordStore.put([did, collection, rkey], {
       rev: commit.rev,

@@ -4,21 +4,16 @@ import type { SyncConsumerContext } from './util.ts'
 
 export async function account(evt: Account, ctx: SyncConsumerContext) {
   const { actorStore } = ctx
+  const did = evt.did
   const status = evt.active
     ? null
     : isActorStatus(evt.status)
       ? evt.status
       : 'unknown'
-  const actor = await actorStore.get(evt.did)
+  const actor = await actorStore.get(did)
   if (!actor) {
-    await actorStore.put(
-      evt.did,
-      createActor({ did: evt.did, upstreamStatus: status }),
-    )
+    await actorStore.put(did, createActor({ did, upstreamStatus: status }))
   } else {
-    await actorStore.put(evt.did, {
-      ...actor,
-      upstreamStatus: status,
-    })
+    await actorStore.put(did, { ...actor, upstreamStatus: status })
   }
 }
