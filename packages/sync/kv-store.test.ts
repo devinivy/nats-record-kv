@@ -35,7 +35,7 @@ test('SqliteKvStore', async () => {
     assert.strictEqual(result, null)
   })
 
-  await test('scan', async () => {
+  await test('scan nested', { skip: false }, async () => {
     const db = new DatabaseSync(':memory:')
     const kv = new SqliteKvStore(db)
     const inserts: [KvKey, KvValue][] = []
@@ -63,11 +63,28 @@ test('SqliteKvStore', async () => {
     for await (const result of kv.scan(['ns', numericKey(20)])) {
       results.push(result)
     }
+    assert.strictEqual(results.length, 50)
     for (const [_, j] of cell(1, 50)) {
       assert.deepStrictEqual(results[j], [
         ['ns', numericKey(20), numericKey(j)],
         `${j + 20 * 50}`,
       ])
     }
+  })
+
+  await test('scan lexicographical', { skip: false }, async () => {
+    const db = new DatabaseSync(':memory:')
+    const kv = new SqliteKvStore(db)
+    await kv.put(['ns', 'a0'], '2')
+    await kv.put(['ns', 'a'], '1')
+    // Scan full namespace
+    const results: [KvKey, KvValue][] = []
+    for await (const result of kv.scan(['ns'])) {
+      results.push(result)
+    }
+    assert.deepStrictEqual(results, [
+      [['ns', 'a'], '1'],
+      [['ns', 'a0'], '2'],
+    ])
   })
 })

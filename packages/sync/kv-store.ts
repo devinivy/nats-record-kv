@@ -1,7 +1,11 @@
+import assert from 'node:assert'
 import { DatabaseSync, StatementSync } from 'node:sqlite'
 
 export type KvKey = string[]
 export type KvValue = string
+
+const NUL = '\x00'
+const HI_BUF = Buffer.from('\xFF')
 
 export interface KvStore {
   get(key: KvKey): Promise<KvValue | null>
@@ -15,12 +19,12 @@ export class SqliteKvStore implements KvStore {
 
   constructor(db = new DatabaseSync(':memory:')) {
     this.db = db
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS kv_store (
-        key TEXT PRIMARY KEY,
+    this.db.exec(
+      `CREATE TABLE IF NOT EXISTS kv_store (
+        key BLOB PRIMARY KEY,
         value TEXT NOT NULL
-      ) STRICT;
-    `)
+      ) STRICT`,
+    )
   }
 
   private getQuery?: StatementSync
@@ -37,7 +41,7 @@ export class SqliteKvStore implements KvStore {
   async put(key: KvKey, value: KvValue): Promise<void> {
     const putQuery = (this.putQuery ??= this.db.prepare(
       `INSERT INTO kv_store (key, value) VALUES (:key, :value)
-        ON CONFLICT (key) DO UPDATE SET value = :value;`,
+        ON CONFLICT (key) DO UPDATE SET value = :value`,
     ))
     putQuery.run({ key: this.key(key), value })
   }
@@ -55,42 +59,43 @@ export class SqliteKvStore implements KvStore {
   async *scan(prefix: KvKey) {
     const scanQuery = (this.scanQuery ??= this.db.prepare(
       `SELECT key, value FROM kv_store
-        WHERE key >= :prefix AND key < (:prefix || X'FFFF')
+        WHERE key >= :start AND key < :end
         ORDER BY key ASC
         LIMIT 1000`,
     ))
     const scanQueryNext = (this.scanQueryNext ??= this.db.prepare(
       `SELECT key, value FROM kv_store
-        WHERE key >= :prefix AND key < (:prefix || X'FFFF') AND key > :cursor
+        WHERE key >= :start AND key < :end AND key > :cursor
         ORDER BY key ASC
         LIMIT 1000`,
     ))
-    let cursor: string | undefined
+    const start = this.key(prefix)
+    const end = Buffer.concat([start, HI_BUF])
+    let cursor: Uint8Array | undefined
     do {
       const items = cursor
-        ? scanQueryNext.all({ prefix: this.prefix(prefix), cursor })
-        : scanQuery.all({ prefix: this.prefix(prefix) })
+        ? scanQueryNext.all({ start, end, cursor })
+        : scanQuery.all({ start, end })
       for (const item of items) {
-        const key = this.parseKey(item.key as string)
+        // console.log(item)
+        const key = this.parseKey(item.key as Uint8Array)
         const value = item.value as string
         yield [key, value] satisfies [KvKey, KvValue]
       }
-      cursor = items.at(-1)?.key as string | undefined
+      cursor = items.at(-1)?.key as Uint8Array | undefined
     } while (cursor)
   }
 
   private key(key: KvKey) {
-    // e.g. ['namespace', 'key-a', 'key-b'] -> "namespace","key-a","key-b"
-    return JSON.stringify(key).slice(1, -1)
+    // e.g. ['namespace', 'key-a', 'key-b'] -> namespace\x00key-a\x00key-b\x00
+    assert(key.every((part) => part && !part.includes(NUL)))
+    return Buffer.from(key.join(NUL) + NUL)
   }
 
-  private parseKey(key: string): KvKey {
-    // e.g. "namespace","key-a","key-b" -> ['namespace', 'key-a', 'key-b']
-    return JSON.parse(`[${key}]`) as KvKey
-  }
-
-  private prefix(key: KvKey) {
-    // e.g ['namespace', 'key-a'] -> "namespace","key-a",
-    return this.key(key) + ','
+  private parseKey(key: Uint8Array): KvKey {
+    // e.g.  namespace\x00key-a\x00key-b\x00 -> ['namespace', 'key-a', 'key-b']
+    const parts = Buffer.from(key).toString().split(NUL)
+    assert(parts.pop() === '')
+    return parts
   }
 }
