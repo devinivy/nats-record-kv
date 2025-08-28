@@ -75,16 +75,15 @@ test('SqliteKvStore', async () => {
   await test('scan lexicographical', { skip: false }, async () => {
     const db = new DatabaseSync(':memory:')
     const kv = new SqliteKvStore(db)
-    await kv.put(['ns', 'a0'], '2')
-    await kv.put(['ns', 'a'], '1')
-    // Scan full namespace
+    await kv.put(['ns', 'a\x20', 'b'], '2')
+    await kv.put(['ns', 'a', 'b'], '1')
     const results: [KvKey, KvValue][] = []
     for await (const result of kv.scan(['ns'])) {
       results.push(result)
     }
     assert.deepStrictEqual(results, [
-      [['ns', 'a'], '1'],
-      [['ns', 'a0'], '2'],
+      [['ns', 'a', 'b'], '1'],
+      [['ns', 'a\x20', 'b'], '2'],
     ])
   })
 })

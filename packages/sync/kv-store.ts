@@ -77,7 +77,6 @@ export class SqliteKvStore implements KvStore {
         ? scanQueryNext.all({ start, end, cursor })
         : scanQuery.all({ start, end })
       for (const item of items) {
-        // console.log(item)
         const key = this.parseKey(item.key as Uint8Array)
         const value = item.value as string
         yield [key, value] satisfies [KvKey, KvValue]
