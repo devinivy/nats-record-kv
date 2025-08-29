@@ -15,7 +15,7 @@ const ERROR = '__ERROR__'
 export function createWorker<I, O>(
   mod: ImportMeta,
   run: (input: AsyncIterable<I>) => AsyncIterable<O>,
-) {
+): Worker<I, O> {
   if (process.send) {
     // this is a forked child process
     ;(async () => {
@@ -40,6 +40,7 @@ export function createWorker<I, O>(
           async function* (input) {
             try {
               for await (const output of run(input)) {
+                // console.log({ output })
                 yield [null, output]
               }
               yield [DONE]
@@ -55,55 +56,37 @@ export function createWorker<I, O>(
         )
       }
     })()
-    return function () {
-      assert.fail('cannot invoke worker from within process')
-    }
-  }
-
-  // this is used by the parent/caller
-  return function spawnWorker() {
-    const proc = fork(fileURLToPath(mod.url))
-    async function* call(
-      input: AsyncIterable<I>,
-      autoExit = true,
-    ): AsyncIterable<O> {
-      // @TODO handle failure, signal completion
-      const ac = new AbortController()
-      proc.once('error', (err) => ac.abort(err))
-      pipeline(
-        input,
-        async function* (input) {
-          yield [START]
-          for await (const item of input) {
-            yield [null, item]
-          }
-          yield [END]
+    return Object.assign(
+      async function () {
+        assert.fail('cannot invoke a worker from within a worker')
+      },
+      {
+        spawn() {
+          assert.fail('cannot spawn a worker from within a worker')
         },
-        ipcWritable(proc),
-        { end: false, signal: ac.signal },
-      ).catch((err) => {
-        assert(ac.signal.aborted, err)
-      })
-      try {
-        for await (const [code, msg] of ipcReadable(proc)) {
-          if (code === DONE) {
-            return
-          } else if (code === ERROR) {
-            // @TODO tidy error
-            const error = new Error(msg.message)
-            if (msg.stack) error.stack = msg.stack
-            throw error
-          } else {
-            yield msg as O
-          }
-        }
-      } finally {
-        ac.abort()
-        if (autoExit) proc.kill()
-      }
-    }
-    return { proc, call }
+      },
+    ) as unknown as Worker<I, O>
   }
+  // this is used by the parent/caller
+  return Object.assign(
+    async function* (input: AsyncIterable<I>) {
+      yield* call<I, O>(forkProc(mod), input, true)
+    },
+    {
+      spawn() {
+        const proc = forkProc(mod)
+        return {
+          proc,
+          call: call.bind(null, proc),
+        }
+      },
+    },
+  )
+}
+
+type Worker<I, O> = {
+  (input: AsyncIterable<I>): AsyncIterable<O>
+  spawn(): WorkerHandle<I, O>
 }
 
 type WorkerHandle<I, O> = {
@@ -112,10 +95,7 @@ type WorkerHandle<I, O> = {
 }
 
 // @TODO replace crashed worker?
-export function workerPool<I, O>(
-  spawnWorker: () => WorkerHandle<I, O>,
-  size = cpus().length,
-) {
+export function workerPool<I, O>(worker: Worker<I, O>, size = cpus().length) {
   const workers: { handle: WorkerHandle<I, O>; busy: boolean }[] = []
   const queue: {
     input: AsyncIterable<I>
@@ -123,7 +103,7 @@ export function workerPool<I, O>(
   }[] = []
 
   for (let i = 0; i < size; i++) {
-    workers.push({ handle: spawnWorker(), busy: false })
+    workers.push({ handle: worker.spawn(), busy: false })
   }
 
   function dispatch() {
@@ -148,25 +128,29 @@ export function workerPool<I, O>(
     )
   }
 
-  function run(input: AsyncIterable<I>): AsyncIterable<O> {
-    return {
-      async *[Symbol.asyncIterator]() {
-        const output = await new Promise<AsyncIterable<O>>((resolve) => {
-          queue.push({ input, resolve })
-          dispatch()
-        })
-        yield* output
+  return Object.assign(
+    function (input: AsyncIterable<I>): AsyncIterable<O> {
+      return {
+        async *[Symbol.asyncIterator]() {
+          const output = await new Promise<AsyncIterable<O>>((resolve) => {
+            queue.push({ input, resolve })
+            dispatch()
+          })
+          yield* output
+        },
+      }
+    },
+    {
+      destroy() {
+        for (const w of workers) {
+          w.handle.proc.kill()
+        }
       },
-    }
-  }
-
-  function destroy() {
-    for (const w of workers) {
-      w.handle.proc.kill()
-    }
-  }
-
-  return { run, destroy }
+      [Symbol.dispose]() {
+        this.destroy()
+      },
+    },
+  )
 }
 
 function ipcWritable(proc: NodeJS.Process | ChildProcess) {
@@ -186,4 +170,50 @@ function ipcReadable(proc: NodeJS.Process | ChildProcess) {
     }
   }
   return Readable.from(messages(), { objectMode: true })
+}
+
+async function* call<I, O>(
+  proc: ChildProcess,
+  input: AsyncIterable<I>,
+  autoExit = true,
+): AsyncIterable<O> {
+  // @TODO handle failure, signal completion
+  const ac = new AbortController()
+  proc.once('error', (err) => ac.abort(err))
+  pipeline(
+    input,
+    async function* (input) {
+      yield [START]
+      for await (const item of input) {
+        yield [null, item]
+      }
+      yield [END]
+    },
+    ipcWritable(proc),
+    { end: false, signal: ac.signal },
+  ).catch((err) => {
+    assert(ac.signal.aborted, err)
+  })
+  try {
+    // @TODO ensure message shape
+    for await (const [code, msg] of ipcReadable(proc)) {
+      if (code === DONE) {
+        return
+      } else if (code === ERROR) {
+        // @TODO tidy error
+        const error = new Error(msg.message)
+        if (msg.stack) error.stack = msg.stack
+        throw error
+      } else {
+        yield msg as O
+      }
+    }
+  } finally {
+    ac.abort()
+    if (autoExit) proc.kill()
+  }
+}
+
+function forkProc(mod: ImportMeta) {
+  return fork(fileURLToPath(mod.url))
 }
