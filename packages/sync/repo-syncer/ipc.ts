@@ -1,7 +1,9 @@
+import assert from 'node:assert'
 import { fork, type ChildProcess } from 'node:child_process'
 import { cpus } from 'node:os'
-import { exit, send, stdin, stdout } from 'node:process'
+import process, { stdin, stdout } from 'node:process'
 import readline from 'node:readline'
+import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 
 const START = '__START__'
@@ -15,101 +17,116 @@ function isControlCode(line: string, code: ControlCode) {
   return line.startsWith(code)
 }
 
-export function createWorker<I = unknown, O = unknown>(
+const body = JSON.stringify
+
+async function* linesToChunks(lines: AsyncIterable<string>) {
+  for await (const line of lines) {
+    yield Buffer.from(line + '\n')
+  }
+}
+
+export function createWorker<I, O>(
   mod: ImportMeta,
   run: (input: AsyncIterable<I>) => AsyncIterable<O>,
 ) {
-  if (!send) {
+  if (process.send) {
     // this is a forked child process
     ;(async () => {
-      const rl = readline.createInterface({
-        input: stdin,
-        crlfDelay: Infinity,
-      })
-
-      let buffer: I[] = []
-
-      async function* inputStream(items: I[]) {
-        for (const i of items) yield i
-      }
-
-      for await (const line of rl) {
-        if (isControlCode(line, START)) {
-          buffer = []
-        } else if (isControlCode(line, END)) {
-          try {
-            const iter = inputStream(buffer)
-            for await (const val of run(iter)) {
-              stdout.write(JSON.stringify(val) + '\n')
+      while (true) {
+        const inputLines = readline.createInterface({
+          input: stdin,
+          crlfDelay: Infinity,
+        })
+        await pipeline(
+          inputLines,
+          async function* (lines) {
+            let started = false
+            for await (const line of lines) {
+              if (isControlCode(line, START)) {
+                assert(!started, 'started')
+                started = true
+              } else if (isControlCode(line, END)) {
+                assert(started, 'not started')
+                return
+              } else {
+                assert(started, 'not started')
+                yield JSON.parse(line) as I
+              }
             }
-            stdout.write(`${DONE}\n`)
-          } catch (err: unknown) {
-            stdout.write(
-              ERROR +
-                JSON.stringify({
-                  message: err?.['message'],
-                  stack: err?.['stack'],
-                }) +
-                '\n',
-            )
-          }
-        } else {
-          buffer.push(JSON.parse(line) as I)
-        }
+          },
+          async function* (input) {
+            try {
+              for await (const output of run(input)) {
+                yield body(output)
+              }
+              yield DONE
+            } catch (err: unknown) {
+              yield ERROR +
+                body({ message: err?.['message'], stack: err?.['stack'] })
+            }
+          },
+          linesToChunks,
+          stdout,
+          { end: false },
+        )
       }
-    })().catch((err) => {
-      console.error(err)
-      exit(1)
-    })
-    return
+    })()
+    return function () {
+      assert.fail('cannot invoke worker from within process')
+    }
   }
 
   // this is used by the parent/caller
   return function spawnWorker() {
     const proc = fork(fileURLToPath(mod.url), [], {
-      stdio: ['pipe', 'pipe', 'inherit'],
+      stdio: ['pipe', 'pipe', 'inherit', 'ipc'],
     })
 
     async function* call(
       input: AsyncIterable<I>,
       autoExit = true,
     ): AsyncIterable<O> {
-      proc.stdin!.write(`${START}\n`)
-      for await (const item of input) {
-        proc.stdin!.write(JSON.stringify(item) + '\n')
-      }
-      proc.stdin!.write(`${END}\n`)
-
-      const rl = readline.createInterface({
+      const outputLines = readline.createInterface({
         input: proc.stdout!,
         crlfDelay: Infinity,
       })
-
-      let error: Error | null = null
-
-      try {
-        for await (const line of rl) {
-          if (isControlCode(line, DONE)) break
-          if (isControlCode(line, ERROR)) {
-            const payload = JSON.parse(line.slice(ERROR.length))
-            error = new Error(payload.message)
-            if (payload.stack) error.stack = payload.stack
-            break
+      // @TODO handle failure, signal completion
+      const ac = new AbortController()
+      proc.once('error', (err) => ac.abort(err))
+      pipeline(
+        input,
+        async function* (input) {
+          yield START
+          for await (const item of input) {
+            yield body(item)
           }
-          yield JSON.parse(line) as O
+          yield END
+        },
+        linesToChunks,
+        proc.stdin!,
+        { end: false, signal: ac.signal },
+      ).catch((err) => {
+        assert(ac.signal.aborted, err)
+      })
+      try {
+        for await (const line of outputLines) {
+          if (isControlCode(line, DONE)) {
+            return
+          } else if (isControlCode(line, ERROR)) {
+            // @TODO tidy error
+            const payload = JSON.parse(line.slice(ERROR.length))
+            const error = new Error(payload.message)
+            if (payload.stack) error.stack = payload.stack
+            throw error
+          } else {
+            yield JSON.parse(line) as O
+          }
         }
       } finally {
-        rl.close()
-        if (autoExit) {
-          proc.kill()
-        }
-      }
-
-      if (error) {
-        throw error
+        ac.abort()
+        if (autoExit) proc.kill()
       }
     }
-
     return { proc, call }
   }
 }
@@ -119,7 +136,8 @@ type WorkerHandle<I, O> = {
   call: (input: AsyncIterable<I>, autoExit: boolean) => AsyncIterable<O>
 }
 
-export function WorkerPool<I, O>(
+// @TODO replace crashed worker?
+export function workerPool<I, O>(
   spawnWorker: () => WorkerHandle<I, O>,
   size = cpus().length,
 ) {
@@ -145,9 +163,7 @@ export function WorkerPool<I, O>(
     resolve(
       (async function* output() {
         try {
-          for await (const val of worker.handle.call(input, false)) {
-            yield val // yield results to consumer
-          }
+          yield* worker.handle.call(input, false)
         } finally {
           // when the generator finishes (consumer fully iterates or stops)
           worker.busy = false
@@ -159,14 +175,12 @@ export function WorkerPool<I, O>(
 
   function run(input: AsyncIterable<I>): AsyncIterable<O> {
     return {
-      [Symbol.asyncIterator]() {
-        return new Promise<AsyncIterator<O>>((resolve) => {
-          queue.push({
-            input,
-            resolve: (out) => resolve(out[Symbol.asyncIterator]()),
-          })
+      async *[Symbol.asyncIterator]() {
+        const output = await new Promise<AsyncIterable<O>>((resolve) => {
+          queue.push({ input, resolve })
           dispatch()
-        }) as unknown as AsyncIterator<O>
+        })
+        yield* output
       },
     }
   }
