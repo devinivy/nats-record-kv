@@ -1,8 +1,9 @@
 import assert from 'node:assert'
 import { fork, type ChildProcess } from 'node:child_process'
+import { on } from 'node:events'
 import { cpus } from 'node:os'
-import process, { stdin, stdout } from 'node:process'
-import readline from 'node:readline'
+import process from 'node:process'
+import { Readable, Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 
@@ -10,20 +11,6 @@ const START = '__START__'
 const END = '__END__'
 const DONE = '__DONE__'
 const ERROR = '__ERROR__'
-
-type ControlCode = typeof START | typeof END | typeof DONE | typeof ERROR
-
-function isControlCode(line: string, code: ControlCode) {
-  return line.startsWith(code)
-}
-
-const body = JSON.stringify
-
-async function* linesToChunks(lines: AsyncIterable<string>) {
-  for await (const line of lines) {
-    yield Buffer.from(line + '\n')
-  }
-}
 
 export function createWorker<I, O>(
   mod: ImportMeta,
@@ -33,40 +20,37 @@ export function createWorker<I, O>(
     // this is a forked child process
     ;(async () => {
       while (true) {
-        const inputLines = readline.createInterface({
-          input: stdin,
-          crlfDelay: Infinity,
-        })
         await pipeline(
-          inputLines,
-          async function* (lines) {
+          ipcReadable(process),
+          async function* (messages) {
             let started = false
-            for await (const line of lines) {
-              if (isControlCode(line, START)) {
+            for await (const [code, msg] of messages) {
+              if (code === START) {
                 assert(!started, 'started')
                 started = true
-              } else if (isControlCode(line, END)) {
+              } else if (code === END) {
                 assert(started, 'not started')
                 return
               } else {
                 assert(started, 'not started')
-                yield JSON.parse(line) as I
+                yield msg as I
               }
             }
           },
           async function* (input) {
             try {
               for await (const output of run(input)) {
-                yield body(output)
+                yield [null, output]
               }
-              yield DONE
+              yield [DONE]
             } catch (err: unknown) {
-              yield ERROR +
-                body({ message: err?.['message'], stack: err?.['stack'] })
+              yield [
+                ERROR,
+                { message: err?.['message'], stack: err?.['stack'] },
+              ]
             }
           },
-          linesToChunks,
-          stdout,
+          ipcWritable(process),
           { end: false },
         )
       }
@@ -78,48 +62,39 @@ export function createWorker<I, O>(
 
   // this is used by the parent/caller
   return function spawnWorker() {
-    const proc = fork(fileURLToPath(mod.url), [], {
-      stdio: ['pipe', 'pipe', 'inherit', 'ipc'],
-    })
-
+    const proc = fork(fileURLToPath(mod.url))
     async function* call(
       input: AsyncIterable<I>,
       autoExit = true,
     ): AsyncIterable<O> {
-      const outputLines = readline.createInterface({
-        input: proc.stdout!,
-        crlfDelay: Infinity,
-      })
       // @TODO handle failure, signal completion
       const ac = new AbortController()
       proc.once('error', (err) => ac.abort(err))
       pipeline(
         input,
         async function* (input) {
-          yield START
+          yield [START]
           for await (const item of input) {
-            yield body(item)
+            yield [null, item]
           }
-          yield END
+          yield [END]
         },
-        linesToChunks,
-        proc.stdin!,
+        ipcWritable(proc),
         { end: false, signal: ac.signal },
       ).catch((err) => {
         assert(ac.signal.aborted, err)
       })
       try {
-        for await (const line of outputLines) {
-          if (isControlCode(line, DONE)) {
+        for await (const [code, msg] of ipcReadable(proc)) {
+          if (code === DONE) {
             return
-          } else if (isControlCode(line, ERROR)) {
+          } else if (code === ERROR) {
             // @TODO tidy error
-            const payload = JSON.parse(line.slice(ERROR.length))
-            const error = new Error(payload.message)
-            if (payload.stack) error.stack = payload.stack
+            const error = new Error(msg.message)
+            if (msg.stack) error.stack = msg.stack
             throw error
           } else {
-            yield JSON.parse(line) as O
+            yield msg as O
           }
         }
       } finally {
@@ -192,4 +167,23 @@ export function workerPool<I, O>(
   }
 
   return { run, destroy }
+}
+
+function ipcWritable(proc: NodeJS.Process | ChildProcess) {
+  assert(proc.send, 'process must have send() ipc channel')
+  return new Writable({
+    objectMode: true,
+    write(chunk, _, cb) {
+      proc.send!(chunk, cb)
+    },
+  })
+}
+
+function ipcReadable(proc: NodeJS.Process | ChildProcess) {
+  const messages = async function* () {
+    for await (const [msg] of on(proc, 'message')) {
+      yield msg
+    }
+  }
+  return Readable.from(messages(), { objectMode: true })
 }
