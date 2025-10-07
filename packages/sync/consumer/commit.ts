@@ -54,6 +54,9 @@ export async function commit(evt: Commit, ctx: SyncConsumerContext) {
   if (!dataCid) {
     return // could not invert ops, indicates a programmer error.
   }
+  if (evt.prevData.toString() !== dataCid.toString()) {
+    return // event not internally consistent, indicates a programmer error.
+  }
   if (actor.dataCid !== dataCid.toString()) {
     // ops inverted but mismatching current state, indicates an operational error: sync.
     if (!actor.status) {
