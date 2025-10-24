@@ -68,10 +68,13 @@ export async function commit(evt: Commit, ctx: SyncConsumerContext) {
   for (const op of evt.ops) {
     // @TODO emit record values
     const [collection, rkey] = op.path.split('/')
-    await recordStore.put([did, collection, rkey], {
-      rev: commit.rev,
-      cid: op.cid ? truncatedCid(op.cid) : null,
-    })
+    if (op.cid) {
+      await recordStore.put([did, collection, rkey], {
+        cid: truncatedCid(op.cid),
+      })
+    } else {
+      await recordStore.del([did, collection, rkey])
+    }
   }
   await actorStore.put(did, {
     ...actor,

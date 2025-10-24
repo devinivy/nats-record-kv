@@ -17,7 +17,11 @@ export class RecordStore {
     await this.kv.put(['record', ...key], JSON.stringify(record))
   }
 
-  async *scanRepo(did: string) {
+  async del(key: RecordKey): Promise<void> {
+    await this.kv.del(['record', ...key])
+  }
+
+  async *scanRepo(did: string): AsyncIterable<[RecordKey, RecordInfo]> {
     for await (const [rawkey, rawvalue] of this.kv.scan(['record', did])) {
       const [_, did, collection, rkey] = rawkey
       const key: RecordKey = [did, collection, rkey]
@@ -30,6 +34,5 @@ export class RecordStore {
 export type RecordKey = [did: string, collection: string, rkey: string]
 
 export type RecordInfo = {
-  rev: string
-  cid: string | null
+  cid: string // @NOTE may be stored truncated
 }
