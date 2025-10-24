@@ -1,0 +1,16 @@
+{
+  "name": "@nats-firehose/repo",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@atproto/common": "^0.4.12",
+    "@atproto/repo": "^0.8.10",
+    "multiformats": "^13.4.1"
+  }
+}

@@ -66,6 +66,18 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1
 
+  packages/repo:
+    dependencies:
+      '@atproto/common':
+        specifier: ^0.4.12
+        version: 0.4.12
+      '@atproto/repo':
+        specifier: ^0.8.10
+        version: 0.8.10
+      multiformats:
+        specifier: ^13.4.1
+        version: 13.4.1
+
   packages/sync:
     dependencies:
       '@atproto-labs/did-resolver':
@@ -158,11 +170,20 @@ packages:
       zod: 3.25.76
     dev: false
 
-  /@atproto/common@0.4.11:
-    resolution: {integrity: sha512-Knv0viYXNMfCdIE7jLUiWJKnnMfEwg+vz2epJQi8WOjqtqCFb3W/3Jn72ZiuovIfpdm13MaOiny6w2NErUQC6g==}
+  /@atproto/common-web@0.4.3:
+    resolution: {integrity: sha512-nRDINmSe4VycJzPo6fP/hEltBcULFxt9Kw7fQk6405FyAWZiTluYHlXOnU7GkQfeUK44OENG1qFTBcmCJ7e8pg==}
+    dependencies:
+      graphemer: 1.4.0
+      multiformats: 9.9.0
+      uint8arrays: 3.0.0
+      zod: 3.25.76
+    dev: false
+
+  /@atproto/common@0.4.12:
+    resolution: {integrity: sha512-NC+TULLQiqs6MvNymhQS5WDms3SlbIKGLf4n33tpftRJcalh507rI+snbcUb7TLIkKw7VO17qMqxEXtIdd5auQ==}
     engines: {node: '>=18.7.0'}
     dependencies:
-      '@atproto/common-web': 0.4.2
+      '@atproto/common-web': 0.4.3
       '@ipld/dag-cbor': 7.0.3
       cbor-x: 1.6.0
       iso-datestring-validator: 2.2.2
@@ -195,11 +216,36 @@ packages:
       zod: 3.25.76
     dev: false
 
+  /@atproto/lexicon@0.5.1:
+    resolution: {integrity: sha512-y8AEtYmfgVl4fqFxqXAeGvhesiGkxiy3CWoJIfsFDDdTlZUC8DFnZrYhcqkIop3OlCkkljvpSJi1hbeC1tbi8A==}
+    dependencies:
+      '@atproto/common-web': 0.4.3
+      '@atproto/syntax': 0.4.1
+      iso-datestring-validator: 2.2.2
+      multiformats: 9.9.0
+      zod: 3.25.76
+    dev: false
+
+  /@atproto/repo@0.8.10:
+    resolution: {integrity: sha512-REs6TZGyxNaYsjqLf447u+gSdyzhvMkVbxMBiKt1ouEVRkiho1CY32+omn62UkpCuGK2y6SCf6x3sVMctgmX4g==}
+    engines: {node: '>=18.7.0'}
+    dependencies:
+      '@atproto/common': 0.4.12
+      '@atproto/common-web': 0.4.3
+      '@atproto/crypto': 0.4.4
+      '@atproto/lexicon': 0.5.1
+      '@ipld/dag-cbor': 7.0.3
+      multiformats: 9.9.0
+      uint8arrays: 3.0.0
+      varint: 6.0.0
+      zod: 3.25.76
+    dev: false
+
   /@atproto/repo@0.8.5:
     resolution: {integrity: sha512-QZ4UWBWDyPMXgPhktmaRYRyCXIw7lIEAyGtaFy7UmCPpJ5TtFKw3GhGrEiNz/fY3/6lrkdDj44/Tzkud/eP/VQ==}
     engines: {node: '>=18.7.0'}
     dependencies:
-      '@atproto/common': 0.4.11
+      '@atproto/common': 0.4.12
       '@atproto/common-web': 0.4.2
       '@atproto/crypto': 0.4.4
       '@atproto/lexicon': 0.4.12
@@ -214,11 +260,15 @@ packages:
     resolution: {integrity: sha512-b9y5ceHS8YKOfP3mdKmwAx5yVj9294UN7FG2XzP6V5aKUdFazEYRnR9m5n5ZQFKa3GNvz7de9guZCJ/sUTcOAA==}
     dev: false
 
+  /@atproto/syntax@0.4.1:
+    resolution: {integrity: sha512-CJdImtLAiFO+0z3BWTtxwk6aY5w4t8orHTMVJgkf++QRJWTxPbIFko/0hrkADB7n2EruDxDSeAgfUGehpH6ngw==}
+    dev: false
+
   /@atproto/xrpc-server@0.9.1:
     resolution: {integrity: sha512-AJfxsKrZgKL/5362Rc0oUEjlgpDCmY/soeyLHHjid8J6clbErAdJVCuFwW4T40aHGFY1J13a29ucwbSfOROx6w==}
     engines: {node: '>=18.7.0'}
     dependencies:
-      '@atproto/common': 0.4.11
+      '@atproto/common': 0.4.12
       '@atproto/crypto': 0.4.4
       '@atproto/lexicon': 0.4.12
       '@atproto/xrpc': 0.7.1
@@ -1657,6 +1707,10 @@ packages:
 
   /multiformats@13.4.0:
     resolution: {integrity: sha512-Mkb/QcclrJxKC+vrcIFl297h52QcKh2Az/9A5vbWytbQt4225UWWWmIuSsKksdww9NkIeYcA7DkfftyLuC/JSg==}
+    dev: false
+
+  /multiformats@13.4.1:
+    resolution: {integrity: sha512-VqO6OSvLrFVAYYjgsr8tyv62/rCQhPgsZUXLTqoFLSgdkgiUYKYeArbt1uWLlEpkjxQe+P0+sHlbPEte1Bi06Q==}
     dev: false
 
   /multiformats@9.9.0:
